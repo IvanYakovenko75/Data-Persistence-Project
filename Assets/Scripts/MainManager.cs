@@ -1,76 +1,81 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
+using System.IO;
 
 public class MainManager : MonoBehaviour
 {
-    public Brick BrickPrefab;
-    public int LineCount = 6;
-    public Rigidbody Ball;
+public static MainManager Instance; /*реализован паттерн Singleton, позволяющий создать всего один экземпляр указанного типа для всего приложения.*/
 
-    public Text ScoreText;
-    public GameObject GameOverText;
-    
-    private bool m_Started = false;
-    private int m_Points;
-    
-    private bool m_GameOver = false;
+    // Переменные, сохраняемые для текущей сессии публичные, чтобы другие скрипты могли их прочитать.
+    public string playerName;
+    public int currentScore;
 
-    
-    // Start is called before the first frame update
-    void Start()
+    //Переменные, сохраняемые между сессиями публичные, чтобы другие скрипты могли их прочитать.
+    public string highScoreName;
+    public int highScore;
+
+    private void Awake()
     {
-        const float step = 0.6f;
-        int perLine = Mathf.FloorToInt(4.0f / step);
-        
-        int[] pointCountArray = new [] {1,1,2,2,5,5};
-        for (int i = 0; i < LineCount; ++i)
+        //если в сцене 2 MainManager, уничтожьте этот MainManager
+        //Происходит, когда другая сцена, на которую вы переместились, пытается создать свой собственный MainManager.
+        if (Instance != null)
         {
-            for (int x = 0; x < perLine; ++x)
-            {
-                Vector3 position = new Vector3(-1.5f + step * x, 2.5f + i * 0.3f, 0);
-                var brick = Instantiate(BrickPrefab, position, Quaternion.identity);
-                brick.PointValue = pointCountArray[i];
-                brick.onDestroyed.AddListener(AddPoint);
-            }
+            Destroy(gameObject);
+            return;
+        }
+        //Но если это единственное, не уничтожаем
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+        //Загрузим высокий балл.
+            LoadHighScore();
+    }
+
+    //Метод заргузки основной игровой сцены
+    public void StartGame()
+    {
+        SceneManager.LoadScene(1);
+    }
+
+    //Класс для сохранения данных на каждой сцене
+    [System.Serializable]
+    public class SaveData
+    {
+        public int highScore;
+        public string highScoreName;
+    }
+
+    //Метод созранения счёта и имени.
+    public void SaveHighScore(int currentScore, string playerName)
+    {
+        //Создаём новый экземпляр данных сохранения
+        SaveData data = new SaveData();
+
+        //Указываем, что будем сохранять
+        data.highScore = currentScore;
+        data.highScoreName = playerName;
+
+        //Затем преобразуйте этот экземпляр в JSON с помощью JsonUtility.ToJson: 
+        string json = JsonUtility.ToJson(data);
+
+        //Наконец, используйте специальный метод File.WriteAllText для записи строки в файл.
+        File.WriteAllText(Application.persistentDataPath + "/savefile.json", json);
+    }
+
+
+    public void LoadHighScore()
+    {
+        string path = Application.persistentDataPath + "/savefile.json";
+        if (File.Exists(path))
+        {
+            string json = File.ReadAllText(path);
+            SaveData data = JsonUtility.FromJson<SaveData>(json);
+
+            highScore = data.highScore;
+            highScoreName = data.highScoreName;
         }
     }
 
-    private void Update()
-    {
-        if (!m_Started)
-        {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                m_Started = true;
-                float randomDirection = Random.Range(-1.0f, 1.0f);
-                Vector3 forceDir = new Vector3(randomDirection, 1, 0);
-                forceDir.Normalize();
-
-                Ball.transform.SetParent(null);
-                Ball.AddForce(forceDir * 2.0f, ForceMode.VelocityChange);
-            }
-        }
-        else if (m_GameOver)
-        {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
-            }
-        }
-    }
-
-    void AddPoint(int point)
-    {
-        m_Points += point;
-        ScoreText.text = $"Score : {m_Points}";
-    }
-
-    public void GameOver()
-    {
-        m_GameOver = true;
-        GameOverText.SetActive(true);
-    }
 }
